@@ -180,20 +180,27 @@ export function ChatPage({
       );
 
       const newMessageHistory = processRawChatHistory(chatSession.messages);
-      setMessageHistory(newMessageHistory);
+      // if the last message is an error, don't overwrite it
+      if (messageHistory[messageHistory.length - 1]?.type !== "error") {
+        setMessageHistory(newMessageHistory);
 
-      const latestMessageId =
-        newMessageHistory[newMessageHistory.length - 1]?.messageId;
-      setSelectedMessageForDocDisplay(
-        latestMessageId !== undefined ? latestMessageId : null
-      );
+        const latestMessageId =
+          newMessageHistory[newMessageHistory.length - 1]?.messageId;
+        setSelectedMessageForDocDisplay(
+          latestMessageId !== undefined ? latestMessageId : null
+        );
+      }
 
       setChatSessionSharedStatus(chatSession.shared_status);
 
       setIsFetchingChatMessages(false);
 
       // if this is a seeded chat, then kick off the AI message generation
-      if (newMessageHistory.length === 1 && !submitOnLoadPerformed.current) {
+      if (
+        newMessageHistory.length === 1 &&
+        !submitOnLoadPerformed.current &&
+        searchParams.get(SEARCH_PARAM_NAMES.SEEDED) === "true"
+      ) {
         submitOnLoadPerformed.current = true;
         const seededMessage = newMessageHistory[0].message;
         await onSubmit({
@@ -670,6 +677,18 @@ export function ChatPage({
           {documentSidebarInitialWidth !== undefined ? (
             <Dropzone
               onDrop={(acceptedFiles) => {
+                const llmAcceptsImages = checkLLMSupportsImageInput(
+                  ...getFinalLLM(llmProviders, livePersona)
+                );
+                if (!llmAcceptsImages) {
+                  setPopup({
+                    type: "error",
+                    message:
+                      "The current Assistant does not support image input. Please select an assistant with Vision support.",
+                  });
+                  return;
+                }
+
                 uploadFilesForChat(acceptedFiles).then(([fileIds, error]) => {
                   if (error) {
                     setPopup({
@@ -683,11 +702,6 @@ export function ChatPage({
                 });
               }}
               noClick
-              disabled={
-                !checkLLMSupportsImageInput(
-                  ...getFinalLLM(llmProviders, livePersona)
-                )
-              }
               onDragLeave={() => console.log("buh")}
               onDragEnter={() => console.log("floppa")}
             >
