@@ -7,8 +7,7 @@ import { FiBookmark, FiCpu, FiInfo, FiX, FiZoomIn } from "react-icons/fi";
 import { HoverPopup } from "@/components/HoverPopup";
 import { Modal } from "@/components/Modal";
 import { useState } from "react";
-import { FaRobot } from "react-icons/fa";
-import { SourceMetadata } from "@/lib/search/interfaces";
+import { Logo } from "@/components/Logo";
 
 const MAX_PERSONAS_TO_DISPLAY = 4;
 
@@ -44,9 +43,8 @@ export function ChatIntro({
         <div className="w-message-xs 2xl:w-message-sm 3xl:w-message">
           <div className="flex">
             <div className="mx-auto">
-              <div className="m-auto h-[80px] w-[80px]">
-                <Image src="/logo.png" alt="Logo" width="1419" height="1520" />
-              </div>
+              <Logo height={80} width={80} className="m-auto" />
+
               <div className="m-auto text-3xl font-bold text-strong mt-4 w-fit">
                 {selectedPersona?.name || "How can I help you today?"}
               </div>
