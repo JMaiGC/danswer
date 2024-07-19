@@ -9,7 +9,7 @@ import { Folder } from "@/app/chat/folders/interfaces";
 import { User } from "@/lib/types";
 import { Persona } from "@/app/admin/assistants/interfaces";
 import Cookies from "js-cookie";
-import { SIDEBAR_TOGGLED_COOKIE_NAME } from "@/components/resizable/contants";
+import { SIDEBAR_TOGGLED_COOKIE_NAME } from "@/components/resizable/constants";
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { useSidebarVisibility } from "@/components/chat_search/hooks";
 import FunctionalHeader from "@/components/chat_search/Header";
@@ -143,6 +143,7 @@ export default function SidebarWrapper<T extends object>({
           <div className="mt-4 mx-auto">{content(contentProps)}</div>
         </div>
       </div>
+      <FixedLogo />
     </div>
   );
 }
