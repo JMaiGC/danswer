@@ -928,6 +928,11 @@ class LLMProvider(Base):
     default_model_name: Mapped[str] = mapped_column(String)
     fast_default_model_name: Mapped[str | None] = mapped_column(String, nullable=True)
 
+    # Models to actually disp;aly to users
+    # If nulled out, we assume in the application logic we should present all
+    display_model_names: Mapped[list[str] | None] = mapped_column(
+        postgresql.ARRAY(String), nullable=True
+    )
     # The LLMs that are available for this provider. Only required if not a default provider.
     # If a default provider, then the LLM options are pulled from the `options.py` file.
     # If needed, can be pulled out as a separate table in the future.
@@ -1121,6 +1126,10 @@ class Persona(Base):
     # where lower value IDs (e.g. created earlier) are displayed first
     display_priority: Mapped[int] = mapped_column(Integer, nullable=True, default=None)
     deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    uploaded_image_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    icon_color: Mapped[str | None] = mapped_column(String, nullable=True)
+    icon_shape: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # These are only defaults, users can select from all if desired
     prompts: Mapped[list[Prompt]] = relationship(
