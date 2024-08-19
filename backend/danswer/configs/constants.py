@@ -12,7 +12,6 @@ ID_SEPARATOR = ":;:"
 DEFAULT_BOOST = 0
 SESSION_KEY = "session"
 
-
 # For chunking/processing chunks
 RETURN_SEPARATOR = "\n\r\n"
 SECTION_SEPARATOR = "\n\n"

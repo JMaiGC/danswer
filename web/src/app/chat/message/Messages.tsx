@@ -255,7 +255,6 @@ export const AIMessage = ({
               size="small"
               assistant={alternativeAssistant || currentPersona}
             />
-
             <div className="w-full">
               <div className="max-w-message-max break-words">
                 {(!toolCall || toolCall.tool_name === SEARCH_TOOL_NAME) &&
@@ -453,7 +452,7 @@ export const AIMessage = ({
                               `}
                                 >
                                   <a
-                                    href={doc.link}
+                                    href={doc.link || undefined}
                                     target="_blank"
                                     className="text-sm flex w-full pt-1 gap-x-1.5 overflow-hidden justify-between font-semibold text-text-700"
                                   >
@@ -623,6 +622,7 @@ export const HumanMessage = ({
   onEdit,
   onMessageSelection,
   shared,
+  stopGenerating = () => null,
 }: {
   shared?: boolean;
   content: string;
@@ -631,6 +631,7 @@ export const HumanMessage = ({
   otherMessagesCanSwitchTo?: number[];
   onEdit?: (editedContent: string) => void;
   onMessageSelection?: (messageId: number) => void;
+  stopGenerating?: () => void;
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -677,7 +678,6 @@ export const HumanMessage = ({
         <div className="xl:ml-8">
           <div className="flex flex-col mr-4">
             <FileDisplay alignBubble files={files || []} />
-
             <div className="flex justify-end">
               <div className="w-full ml-8 flex w-full max-w-message-max break-words">
                 {isEditing ? (
@@ -857,16 +857,18 @@ export const HumanMessage = ({
                   <MessageSwitcher
                     currentPage={currentMessageInd + 1}
                     totalPages={otherMessagesCanSwitchTo.length}
-                    handlePrevious={() =>
+                    handlePrevious={() => {
+                      stopGenerating();
                       onMessageSelection(
                         otherMessagesCanSwitchTo[currentMessageInd - 1]
-                      )
-                    }
-                    handleNext={() =>
+                      );
+                    }}
+                    handleNext={() => {
+                      stopGenerating();
                       onMessageSelection(
                         otherMessagesCanSwitchTo[currentMessageInd + 1]
-                      )
-                    }
+                      );
+                    }}
                   />
                 </div>
               )}

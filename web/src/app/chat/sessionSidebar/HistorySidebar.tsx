@@ -40,6 +40,7 @@ interface HistorySidebarProps {
   reset?: () => void;
   showShareModal?: (chatSession: ChatSession) => void;
   showDeleteModal?: (chatSession: ChatSession) => void;
+  stopGenerating?: () => void;
 }
 
 export const HistorySidebar = forwardRef<HTMLDivElement, HistorySidebarProps>(
@@ -54,6 +55,7 @@ export const HistorySidebar = forwardRef<HTMLDivElement, HistorySidebarProps>(
       openedFolders,
       toggleSidebar,
       removeToggle,
+      stopGenerating = () => null,
       showShareModal,
       showDeleteModal,
     },
@@ -67,11 +69,11 @@ export const HistorySidebar = forwardRef<HTMLDivElement, HistorySidebarProps>(
 
     const currentChatId = currentChatSession?.id;
 
-    // prevent the NextJS Router cache from causing the chat sidebar to not
-    // update / show an outdated list of chats
-    useEffect(() => {
-      router.refresh();
-    }, [currentChatId]);
+    // NOTE: do not do something like the below - assume that the parent
+    // will handle properly refreshing the existingChats
+    // useEffect(() => {
+    //   router.refresh();
+    // }, [currentChatId]);
 
     const combinedSettings = useContext(SettingsContext);
     if (!combinedSettings) {
@@ -179,6 +181,7 @@ export const HistorySidebar = forwardRef<HTMLDivElement, HistorySidebarProps>(
           )}
           <div className="border-b border-border pb-4 mx-3" />
           <PagesTab
+            stopGenerating={stopGenerating}
             newFolderId={newFolderId}
             showDeleteModal={showDeleteModal}
             showShareModal={showShareModal}

@@ -1,9 +1,13 @@
 import logging
 import os
 from collections.abc import MutableMapping
+from logging.handlers import RotatingFileHandler
 from typing import Any
 
+from shared_configs.configs import DEV_LOGGING_ENABLED
+from shared_configs.configs import LOG_FILE_NAME
 from shared_configs.configs import LOG_LEVEL
+from shared_configs.configs import SLACK_CHANNEL_ID
 
 
 logging.addLevelName(logging.INFO + 5, "NOTICE")
@@ -39,24 +43,28 @@ def get_log_level_from_str(log_level_str: str = LOG_LEVEL) -> int:
     return log_level_dict.get(log_level_str.upper(), logging.getLevelName("NOTICE"))
 
 
-class _IndexAttemptLoggingAdapter(logging.LoggerAdapter):
-    """This is used to globally add the index attempt id to all log messages
-    during indexing by workers. This is done so that the logs can be filtered
-    by index attempt ID to get a better idea of what happened during a specific
-    indexing attempt. If the index attempt ID is not set, then this adapter
-    is a no-op."""
-
+class DanswerLoggingAdapter(logging.LoggerAdapter):
     def process(
         self, msg: str, kwargs: MutableMapping[str, Any]
     ) -> tuple[str, MutableMapping[str, Any]]:
+        # If this is an indexing job, add the attempt ID to the log message
+        # This helps filter the logs for this specific indexing
         attempt_id = IndexAttemptSingleton.get_index_attempt_id()
-        if attempt_id is None:
-            return msg, kwargs
+        if attempt_id is not None:
+            msg = f"[Attempt ID: {attempt_id}] {msg}"
 
-        return f"[Attempt ID: {attempt_id}] {msg}", kwargs
+        # For Slack Bot, logs the channel relevant to the request
+        channel_id = self.extra.get(SLACK_CHANNEL_ID) if self.extra else None
+        if channel_id:
+            msg = f"[Channel ID: {channel_id}] {msg}"
 
-    def notice(self, msg: str, *args: Any, **kwargs: Any) -> None:
-        self.log(logging.getLevelName("NOTICE"), msg, *args, **kwargs)
+        return msg, kwargs
+
+    def notice(self, msg: Any, *args: Any, **kwargs: Any) -> None:
+        # Stacklevel is set to 2 to point to the actual caller of notice instead of here
+        self.log(
+            logging.getLevelName("NOTICE"), str(msg), *args, **kwargs, stacklevel=2
+        )
 
 
 class ColoredFormatter(logging.Formatter):
@@ -96,13 +104,13 @@ def get_standard_formatter() -> ColoredFormatter:
 def setup_logger(
     name: str = __name__,
     log_level: int = get_log_level_from_str(),
-    logfile_name: str | None = None,
-) -> _IndexAttemptLoggingAdapter:
+    extra: MutableMapping[str, Any] | None = None,
+) -> DanswerLoggingAdapter:
     logger = logging.getLogger(name)
 
     # If the logger already has handlers, assume it was already configured and return it.
     if logger.handlers:
-        return _IndexAttemptLoggingAdapter(logger)
+        return DanswerLoggingAdapter(logger, extra=extra)
 
     logger.setLevel(log_level)
 
@@ -114,25 +122,33 @@ def setup_logger(
 
     logger.addHandler(handler)
 
-    if logfile_name:
-        is_containerized = os.path.exists("/.dockerenv")
-        file_name_template = (
-            "/var/log/{name}.log" if is_containerized else "./log/{name}.log"
-        )
-        file_handler = logging.FileHandler(file_name_template.format(name=logfile_name))
-        logger.addHandler(file_handler)
+    uvicorn_logger = logging.getLogger("uvicorn.access")
+    if uvicorn_logger:
+        uvicorn_logger.handlers = []
+        uvicorn_logger.addHandler(handler)
+        uvicorn_logger.setLevel(log_level)
+
+    is_containerized = os.path.exists("/.dockerenv")
+    if LOG_FILE_NAME and (is_containerized or DEV_LOGGING_ENABLED):
+        log_levels = ["debug", "info", "notice"]
+        for level in log_levels:
+            file_name = (
+                f"/var/log/{LOG_FILE_NAME}_{level}.log"
+                if is_containerized
+                else f"./log/{LOG_FILE_NAME}_{level}.log"
+            )
+            file_handler = RotatingFileHandler(
+                file_name,
+                maxBytes=25 * 1024 * 1024,  # 25 MB
+                backupCount=5,  # Keep 5 backup files
+            )
+            file_handler.setLevel(get_log_level_from_str(level))
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
+
+            if uvicorn_logger:
+                uvicorn_logger.addHandler(file_handler)
 
     logger.notice = lambda msg, *args, **kwargs: logger.log(logging.getLevelName("NOTICE"), msg, *args, **kwargs)  # type: ignore
 
-    return _IndexAttemptLoggingAdapter(logger)
-
-
-def setup_uvicorn_logger() -> None:
-    logger = logging.getLogger("uvicorn.access")
-    handler = logging.StreamHandler()
-    handler.setLevel(LOG_LEVEL)
-
-    formatter = get_standard_formatter()
-    handler.setFormatter(formatter)
-
-    logger.handlers = [handler]
+    return DanswerLoggingAdapter(logger, extra=extra)
