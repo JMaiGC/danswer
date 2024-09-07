@@ -3,7 +3,6 @@ import "./globals.css";
 import {
   fetchEnterpriseSettingsSS,
   fetchSettingsSS,
-  SettingsError,
 } from "@/components/settings/lib";
 import {
   CUSTOM_ANALYTICS_ENABLED,
@@ -11,7 +10,7 @@ import {
 } from "@/lib/constants";
 import { SettingsProvider } from "@/components/settings/SettingsProvider";
 import { Metadata } from "next";
-import { buildClientUrl } from "@/lib/utilsSS";
+import { buildClientUrl, fetchSS } from "@/lib/utilsSS";
 import { Inter } from "next/font/google";
 import Head from "next/head";
 import { EnterpriseSettings } from "./admin/settings/interfaces";
@@ -105,7 +104,7 @@ export default async function RootLayout({
 
       <body className={`relative ${inter.variable} font-sans`}>
         <div
-          className={`text-default bg-background ${
+          className={`text-default min-h-screen bg-background ${
             // TODO: remove this once proper dark mode exists
             process.env.THEME_IS_DARK?.toLowerCase() === "true" ? "dark" : ""
           }`}
