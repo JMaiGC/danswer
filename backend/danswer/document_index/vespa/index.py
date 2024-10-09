@@ -15,6 +15,7 @@ import httpx
 import requests
 
 from danswer.configs.app_configs import DOCUMENT_INDEX_NAME
+from danswer.configs.app_configs import VESPA_REQUEST_TIMEOUT
 from danswer.configs.chat_configs import DOC_TIME_DECAY
 from danswer.configs.chat_configs import NUM_RETURNED_HITS
 from danswer.configs.chat_configs import TITLE_CONTENT_RATIO
@@ -211,7 +212,7 @@ class VespaIndex(DocumentIndex):
         # indexing / updates / deletes since we have to make a large volume of requests.
         with (
             concurrent.futures.ThreadPoolExecutor(max_workers=NUM_THREADS) as executor,
-            httpx.Client(http2=True) as http_client,
+            httpx.Client(http2=True, timeout=VESPA_REQUEST_TIMEOUT) as http_client,
         ):
             # Check for existing documents, existing documents need to have all of their chunks deleted
             # prior to indexing as the document size (num chunks) may have shrunk
@@ -275,7 +276,7 @@ class VespaIndex(DocumentIndex):
         # indexing / updates / deletes since we have to make a large volume of requests.
         with (
             concurrent.futures.ThreadPoolExecutor(max_workers=NUM_THREADS) as executor,
-            httpx.Client(http2=True) as http_client,
+            httpx.Client(http2=True, timeout=VESPA_REQUEST_TIMEOUT) as http_client,
         ):
             for update_batch in batch_generator(updates, batch_size):
                 future_to_document_id = {
@@ -384,11 +385,13 @@ class VespaIndex(DocumentIndex):
             time.monotonic() - update_start,
         )
 
-    def update_single(self, doc_id: str, fields: VespaDocumentFields) -> None:
+    def update_single(self, doc_id: str, fields: VespaDocumentFields) -> int:
         """Note: if the document id does not exist, the update will be a no-op and the
         function will complete with no errors or exceptions.
         Handle other exceptions if you wish to implement retry behavior
         """
+
+        total_chunks_updated = 0
 
         # Handle Vespa character limitations
         # Mutating update_request but it's not used later anyway
@@ -411,13 +414,13 @@ class VespaIndex(DocumentIndex):
 
         if not update_dict["fields"]:
             logger.error("Update request received but nothing to update")
-            return
+            return 0
 
         index_names = [self.index_name]
         if self.secondary_index_name:
             index_names.append(self.secondary_index_name)
 
-        with httpx.Client(http2=True) as http_client:
+        with httpx.Client(http2=True, timeout=VESPA_REQUEST_TIMEOUT) as http_client:
             for index_name in index_names:
                 params = httpx.QueryParams(
                     {
@@ -426,7 +429,6 @@ class VespaIndex(DocumentIndex):
                     }
                 )
 
-                total_chunks_updated = 0
                 while True:
                     try:
                         resp = http_client.put(
@@ -462,9 +464,10 @@ class VespaIndex(DocumentIndex):
                     f"VespaIndex.update_single: "
                     f"index={index_name} "
                     f"doc={normalized_doc_id} "
-                    f"chunks_deleted={total_chunks_updated}"
+                    f"chunks_updated={total_chunks_updated}"
                 )
-        return
+
+        return total_chunks_updated
 
     def delete(self, doc_ids: list[str]) -> None:
         logger.info(f"Deleting {len(doc_ids)} documents from Vespa")
@@ -473,7 +476,7 @@ class VespaIndex(DocumentIndex):
 
         # NOTE: using `httpx` here since `requests` doesn't support HTTP2. This is beneficial for
         # indexing / updates / deletes since we have to make a large volume of requests.
-        with httpx.Client(http2=True) as http_client:
+        with httpx.Client(http2=True, timeout=VESPA_REQUEST_TIMEOUT) as http_client:
             index_names = [self.index_name]
             if self.secondary_index_name:
                 index_names.append(self.secondary_index_name)
@@ -484,9 +487,11 @@ class VespaIndex(DocumentIndex):
                 )
         return
 
-    def delete_single(self, doc_id: str) -> None:
+    def delete_single(self, doc_id: str) -> int:
         """Possibly faster overall than the delete method due to using a single
         delete call with a selection query."""
+
+        total_chunks_deleted = 0
 
         # Vespa deletion is poorly documented ... luckily we found this
         # https://docs.vespa.ai/en/operations/batch-delete.html#example
@@ -499,7 +504,7 @@ class VespaIndex(DocumentIndex):
         if self.secondary_index_name:
             index_names.append(self.secondary_index_name)
 
-        with httpx.Client(http2=True) as http_client:
+        with httpx.Client(http2=True, timeout=VESPA_REQUEST_TIMEOUT) as http_client:
             for index_name in index_names:
                 params = httpx.QueryParams(
                     {
@@ -508,7 +513,6 @@ class VespaIndex(DocumentIndex):
                     }
                 )
 
-                total_chunks_deleted = 0
                 while True:
                     try:
                         resp = http_client.delete(
@@ -543,7 +547,8 @@ class VespaIndex(DocumentIndex):
                     f"doc={doc_id} "
                     f"chunks_deleted={total_chunks_deleted}"
                 )
-        return
+
+        return total_chunks_deleted
 
     def id_based_retrieval(
         self,
