@@ -58,10 +58,9 @@ from danswer.auth.schemas import UserRole
 from danswer.auth.schemas import UserUpdate
 from danswer.configs.app_configs import AUTH_TYPE
 from danswer.configs.app_configs import DISABLE_AUTH
+from danswer.configs.app_configs import DISABLE_VERIFICATION
 from danswer.configs.app_configs import EMAIL_FROM
-from danswer.configs.app_configs import MULTI_TENANT
 from danswer.configs.app_configs import REQUIRE_EMAIL_VERIFICATION
-from danswer.configs.app_configs import SECRET_JWT_KEY
 from danswer.configs.app_configs import SESSION_EXPIRE_TIME_SECONDS
 from danswer.configs.app_configs import SMTP_PASS
 from danswer.configs.app_configs import SMTP_PORT
@@ -94,7 +93,9 @@ from danswer.utils.telemetry import optional_telemetry
 from danswer.utils.telemetry import RecordType
 from danswer.utils.variable_functionality import fetch_versioned_implementation
 from shared_configs.configs import CURRENT_TENANT_ID_CONTEXTVAR
+from shared_configs.configs import MULTI_TENANT
 from shared_configs.configs import POSTGRES_DEFAULT_SCHEMA
+
 
 logger = setup_logger()
 
@@ -133,7 +134,9 @@ def get_display_email(email: str | None, space_less: bool = False) -> str:
 def user_needs_to_be_verified() -> bool:
     # all other auth types besides basic should require users to be
     # verified
-    return AUTH_TYPE != AuthType.BASIC or REQUIRE_EMAIL_VERIFICATION
+    return not DISABLE_VERIFICATION and (
+        AUTH_TYPE != AuthType.BASIC or REQUIRE_EMAIL_VERIFICATION
+    )
 
 
 def verify_email_is_invited(email: str) -> None:
@@ -290,29 +293,6 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
 
             CURRENT_TENANT_ID_CONTEXTVAR.reset(token)
             return user
-
-    async def on_after_login(
-        self,
-        user: User,
-        request: Request | None = None,
-        response: Response | None = None,
-    ) -> None:
-        if response is None or not MULTI_TENANT:
-            return
-
-        tenant_id = get_tenant_id_for_email(user.email)
-
-        tenant_token = jwt.encode(
-            {"tenant_id": tenant_id}, SECRET_JWT_KEY, algorithm="HS256"
-        )
-
-        response.set_cookie(
-            key="tenant_details",
-            value=tenant_token,
-            httponly=True,
-            secure=WEB_DOMAIN.startswith("https"),
-            samesite="lax",
-        )
 
     async def oauth_callback(
         self: "BaseUserManager[models.UOAP, models.ID]",
@@ -523,8 +503,22 @@ cookie_transport = CookieTransport(
 )
 
 
+# This strategy is used to add tenant_id to the JWT token
+class TenantAwareJWTStrategy(JWTStrategy):
+    async def write_token(self, user: User) -> str:
+        tenant_id = get_tenant_id_for_email(user.email)
+        data = {
+            "sub": str(user.id),
+            "aud": self.token_audience,
+            "tenant_id": tenant_id,
+        }
+        return generate_jwt(
+            data, self.encode_key, self.lifetime_seconds, algorithm=self.algorithm
+        )
+
+
 def get_jwt_strategy() -> JWTStrategy:
-    return JWTStrategy(
+    return TenantAwareJWTStrategy(
         secret=USER_AUTH_SECRET,
         lifetime_seconds=SESSION_EXPIRE_TIME_SECONDS,
     )
