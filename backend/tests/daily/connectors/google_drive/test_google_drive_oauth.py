@@ -41,6 +41,7 @@ def test_include_all(
         + DRIVE_ID_MAPPING["FOLDER_2"]
         + DRIVE_ID_MAPPING["FOLDER_2_1"]
         + DRIVE_ID_MAPPING["FOLDER_2_2"]
+        + DRIVE_ID_MAPPING["SECTIONS"]
     )
     assert_retrieved_docs_match_expected(
         retrieved_docs=retrieved_docs,
@@ -75,6 +76,7 @@ def test_include_shared_drives_only(
         + DRIVE_ID_MAPPING["FOLDER_2"]
         + DRIVE_ID_MAPPING["FOLDER_2_1"]
         + DRIVE_ID_MAPPING["FOLDER_2_2"]
+        + DRIVE_ID_MAPPING["SECTIONS"]
     )
     assert_retrieved_docs_match_expected(
         retrieved_docs=retrieved_docs,
@@ -134,7 +136,6 @@ def test_drive_one_only(
         + DRIVE_ID_MAPPING["FOLDER_1"]
         + DRIVE_ID_MAPPING["FOLDER_1_1"]
         + DRIVE_ID_MAPPING["FOLDER_1_2"]
-        + ["file_61.txt"]  # Temporary patch so merge queue works (TODO: update mapping)
     )
     assert_retrieved_docs_match_expected(
         retrieved_docs=retrieved_docs,
