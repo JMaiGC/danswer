@@ -412,6 +412,7 @@ export function AssistantEditor({
                 });
               }
             }
+
             await refreshAssistants();
             router.push(
               redirectType === SuccessfulPersonaUpdateRedirectType.ADMIN

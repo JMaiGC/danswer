@@ -57,7 +57,7 @@ from danswer.utils.special_types import JSON_ro
 from danswer.file_store.models import FileDescriptor
 from danswer.llm.override_models import LLMOverride
 from danswer.llm.override_models import PromptOverride
-from danswer.search.enums import RecencyBiasSetting
+from danswer.context.search.enums import RecencyBiasSetting
 from danswer.utils.encryption import decrypt_bytes_to_string
 from danswer.utils.encryption import encrypt_string_to_bytes
 from danswer.utils.headers import HeaderItemDict
@@ -1181,7 +1181,7 @@ class LLMProvider(Base):
     default_model_name: Mapped[str] = mapped_column(String)
     fast_default_model_name: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # Models to actually disp;aly to users
+    # Models to actually display to users
     # If nulled out, we assume in the application logic we should present all
     display_model_names: Mapped[list[str] | None] = mapped_column(
         postgresql.ARRAY(String), nullable=True

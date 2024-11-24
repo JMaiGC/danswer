@@ -5,8 +5,8 @@ from pydantic import BaseModel
 from pydantic import Field
 
 from danswer.auth.schemas import UserRole
+from danswer.context.search.enums import RecencyBiasSetting
 from danswer.db.enums import AccessType
-from danswer.search.enums import RecencyBiasSetting
 from danswer.server.documents.models import DocumentSource
 from danswer.server.documents.models import InputType
 
@@ -136,11 +136,10 @@ class DATestChatSession(BaseModel):
 
 
 class DATestChatMessage(BaseModel):
-    id: str | None = None
+    id: int
     chat_session_id: UUID
-    parent_message_id: str | None
+    parent_message_id: int | None
     message: str
-    response: str
 
 
 class StreamedResponse(BaseModel):
