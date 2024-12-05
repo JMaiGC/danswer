@@ -70,7 +70,7 @@ import { StarterMessages } from "../../components/assistants/StarterMessage";
 import {
   AnswerPiecePacket,
   DanswerDocument,
-  FinalContextDocs,
+  DocumentInfoPacket,
   StreamStopInfo,
   StreamStopReason,
 } from "@/lib/search/interfaces";
@@ -109,6 +109,7 @@ import AssistantBanner from "../../components/assistants/AssistantBanner";
 import TextView from "@/components/chat_search/TextView";
 import AssistantSelector from "@/components/chat_search/AssistantSelector";
 import { Modal } from "@/components/Modal";
+import { createPostponedAbortSignal } from "next/dist/server/app-render/dynamic-rendering";
 
 const TEMP_USER_MESSAGE_ID = -1;
 const TEMP_ASSISTANT_MESSAGE_ID = -2;
@@ -188,7 +189,7 @@ export function ChatPage({
     !shouldShowWelcomeModal
   );
 
-  const { user, isAdmin, isLoadingUser } = useUser();
+  const { user, isAdmin } = useUser();
   const slackChatId = searchParams.get("slackChatId");
   const existingChatIdRaw = searchParams.get("chatId");
   const [sendOnLoad, setSendOnLoad] = useState<string | null>(
@@ -921,7 +922,6 @@ export function ChatPage({
           setHasPerformedInitialScroll(true);
         }, 100);
       } else {
-        console.log("All messages are already rendered, scrolling immediately");
         // If all messages are already rendered, scroll immediately
         endDivRef.current.scrollIntoView({
           behavior: fast ? "auto" : "smooth",
@@ -973,6 +973,16 @@ export function ChatPage({
       }
     }
   };
+
+  useEffect(() => {
+    if (
+      (!selectedDocuments || selectedDocuments.length === 0) &&
+      documentSidebarToggled &&
+      !filtersToggled
+    ) {
+      setDocumentSidebarToggled(false);
+    }
+  }, [chatSessionIdRef.current]);
 
   useEffect(() => {
     adjustDocumentSidebarWidth(); // Adjust the width on initial render
@@ -1252,7 +1262,6 @@ export function ChatPage({
           if (!packet) {
             continue;
           }
-
           if (!initialFetchDetails) {
             if (!Object.hasOwn(packet, "user_message_id")) {
               console.error(
@@ -1326,8 +1335,8 @@ export function ChatPage({
 
             if (Object.hasOwn(packet, "answer_piece")) {
               answer += (packet as AnswerPiecePacket).answer_piece;
-            } else if (Object.hasOwn(packet, "final_context_docs")) {
-              documents = (packet as FinalContextDocs).final_context_docs;
+            } else if (Object.hasOwn(packet, "top_documents")) {
+              documents = (packet as DocumentInfoPacket).top_documents;
               retrievalType = RetrievalType.Search;
               if (documents && documents.length > 0) {
                 // point to the latest message (we don't know the messageId yet, which is why
@@ -1601,14 +1610,14 @@ export function ChatPage({
       }
     });
   };
-  const [showDocSidebar, setShowDocSidebar] = useState(false); // State to track if sidebar is open
+  const [showHistorySidebar, setShowHistorySidebar] = useState(false); // State to track if sidebar is open
 
   // Used to maintain a "time out" for history sidebar so our existing refs can have time to process change
   const [untoggled, setUntoggled] = useState(false);
   const [loadingError, setLoadingError] = useState<string | null>(null);
 
   const explicitlyUntoggle = () => {
-    setShowDocSidebar(false);
+    setShowHistorySidebar(false);
 
     setUntoggled(true);
     setTimeout(() => {
@@ -1627,7 +1636,7 @@ export function ChatPage({
     toggle();
   };
   const removeToggle = () => {
-    setShowDocSidebar(false);
+    setShowHistorySidebar(false);
     toggle(false);
   };
 
@@ -1637,8 +1646,8 @@ export function ChatPage({
   useSidebarVisibility({
     toggledSidebar,
     sidebarElementRef,
-    showDocSidebar,
-    setShowDocSidebar,
+    showDocSidebar: showHistorySidebar,
+    setShowDocSidebar: setShowHistorySidebar,
     setToggled: removeToggle,
     mobile: settings?.isMobile,
   });
@@ -2089,7 +2098,7 @@ export function ChatPage({
                 duration-300
                 ease-in-out
                 ${
-                  !untoggled && (showDocSidebar || toggledSidebar)
+                  !untoggled && (showHistorySidebar || toggledSidebar)
                     ? "opacity-100 w-[250px] translate-x-0"
                     : "opacity-0 w-[200px] pointer-events-none -translate-x-10"
                 }`}
@@ -2103,7 +2112,7 @@ export function ChatPage({
                   ref={innerSidebarElementRef}
                   toggleSidebar={toggleSidebar}
                   toggled={toggledSidebar && !settings?.isMobile}
-                  backgroundToggled={toggledSidebar || showDocSidebar}
+                  backgroundToggled={toggledSidebar || showHistorySidebar}
                   existingChats={chatSessions}
                   currentChatSession={selectedChatSession}
                   folders={folders}
@@ -2162,7 +2171,7 @@ export function ChatPage({
           )}
 
           <BlurBackground
-            visible={!untoggled && (showDocSidebar || toggledSidebar)}
+            visible={!untoggled && (showHistorySidebar || toggledSidebar)}
           />
 
           <div
@@ -2190,9 +2199,7 @@ export function ChatPage({
                 />
               )}
 
-              {documentSidebarInitialWidth !== undefined &&
-              isReady &&
-              !isLoadingUser ? (
+              {documentSidebarInitialWidth !== undefined && isReady ? (
                 <Dropzone onDrop={handleImageUpload} noClick>
                   {({ getRootProps }) => (
                     <div className="flex h-full w-full">
@@ -2824,7 +2831,7 @@ export function ChatPage({
               )}
             </div>
           </div>
-          <FixedLogo backgroundToggled={toggledSidebar || showDocSidebar} />
+          <FixedLogo backgroundToggled={toggledSidebar || showHistorySidebar} />
         </div>
         {/* Right Sidebar - DocumentSidebar */}
       </div>
