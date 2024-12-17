@@ -1,3 +1,4 @@
+import time
 import traceback
 from datetime import datetime
 from datetime import timezone
@@ -89,10 +90,11 @@ logger = setup_logger()
 def check_for_vespa_sync_task(self: Task, *, tenant_id: str | None) -> None:
     """Runs periodically to check if any document needs syncing.
     Generates sets of tasks for Celery if syncing is needed."""
+    time_start = time.monotonic()
 
     r = get_redis_client(tenant_id=tenant_id)
 
-    lock_beat = r.lock(
+    lock_beat: RedisLock = r.lock(
         OnyxRedisLocks.CHECK_VESPA_SYNC_BEAT_LOCK,
         timeout=CELERY_VESPA_SYNC_BEAT_LOCK_TIMEOUT,
     )
@@ -156,10 +158,14 @@ def check_for_vespa_sync_task(self: Task, *, tenant_id: str | None) -> None:
             "Soft time limit exceeded, task is being terminated gracefully."
         )
     except Exception:
-        task_logger.exception(f"Unexpected exception: tenant={tenant_id}")
+        task_logger.exception("Unexpected exception during vespa metadata sync")
     finally:
         if lock_beat.owned():
             lock_beat.release()
+
+    time_elapsed = time.monotonic() - time_start
+    task_logger.info(f"check_for_vespa_sync_task finished: elapsed={time_elapsed:.2f}")
+    return
 
 
 def try_generate_stale_document_sync_tasks(
@@ -730,6 +736,7 @@ def monitor_vespa_sync(self: Task, tenant_id: str | None) -> bool:
 
     Returns True if the task actually did work, False if it exited early to prevent overlap
     """
+    time_start = time.monotonic()
     r = get_redis_client(tenant_id=tenant_id)
 
     lock_beat: RedisLock = r.lock(
@@ -824,6 +831,8 @@ def monitor_vespa_sync(self: Task, tenant_id: str | None) -> bool:
         if lock_beat.owned():
             lock_beat.release()
 
+    time_elapsed = time.monotonic() - time_start
+    task_logger.info(f"monitor_vespa_sync finished: elapsed={time_elapsed:.2f}")
     return True
 
 
@@ -873,13 +882,9 @@ def vespa_metadata_sync_task(
             # the sync might repeat again later
             mark_document_as_synced(document_id, db_session)
 
-            task_logger.info(
-                f"tenant={tenant_id} doc={document_id} action=sync chunks={chunks_affected}"
-            )
+            task_logger.info(f"doc={document_id} action=sync chunks={chunks_affected}")
     except SoftTimeLimitExceeded:
-        task_logger.info(
-            f"SoftTimeLimitExceeded exception. tenant={tenant_id} doc={document_id}"
-        )
+        task_logger.info(f"SoftTimeLimitExceeded exception. doc={document_id}")
     except Exception as ex:
         if isinstance(ex, RetryError):
             task_logger.warning(
@@ -897,14 +902,13 @@ def vespa_metadata_sync_task(
             if e.response.status_code == HTTPStatus.BAD_REQUEST:
                 task_logger.exception(
                     f"Non-retryable HTTPStatusError: "
-                    f"tenant={tenant_id} "
                     f"doc={document_id} "
                     f"status={e.response.status_code}"
                 )
             return False
 
         task_logger.exception(
-            f"Unexpected exception: tenant={tenant_id} doc={document_id}"
+            f"Unexpected exception during vespa metadata sync: doc={document_id}"
         )
 
         # Exponential backoff from 2^4 to 2^6 ... i.e. 16, 32, 64

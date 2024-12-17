@@ -5,6 +5,8 @@ from typing import Literal
 from typing import NotRequired
 from typing import Optional
 from uuid import uuid4
+
+from pydantic import BaseModel
 from typing_extensions import TypedDict  # noreorder
 from uuid import UUID
 
@@ -1008,7 +1010,7 @@ class ChatSession(Base):
         "ChatFolder", back_populates="chat_sessions"
     )
     messages: Mapped[list["ChatMessage"]] = relationship(
-        "ChatMessage", back_populates="chat_session"
+        "ChatMessage", back_populates="chat_session", cascade="all, delete-orphan"
     )
     persona: Mapped["Persona"] = relationship("Persona")
 
@@ -1076,6 +1078,8 @@ class ChatMessage(Base):
         "SearchDoc",
         secondary=ChatMessage__SearchDoc.__table__,
         back_populates="chat_messages",
+        cascade="all, delete-orphan",
+        single_parent=True,
     )
 
     tool_call: Mapped["ToolCall"] = relationship(
@@ -1340,6 +1344,11 @@ class StarterMessage(TypedDict):
     """NOTE: is a `TypedDict` so it can be used as a type hint for a JSONB column
     in Postgres"""
 
+    name: str
+    message: str
+
+
+class StarterMessageModel(BaseModel):
     name: str
     message: str
 

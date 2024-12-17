@@ -27,6 +27,7 @@ import {
   buildLatestMessageChain,
   checkAnyAssistantHasSearch,
   createChatSession,
+  deleteAllChatSessions,
   deleteChatSession,
   getCitedDocumentsFromMessage,
   getHumanAndAIMessageFromMessageNumber,
@@ -272,6 +273,7 @@ export function ChatPage({
   };
 
   const llmOverrideManager = useLlmOverride(
+    llmProviders,
     modelVersionFromSearchParams || (user?.preferences.default_model ?? null),
     selectedChatSession,
     defaultTemperature
@@ -318,9 +320,9 @@ export function ChatPage({
     );
 
     if (personaDefault) {
-      llmOverrideManager.setLlmOverride(personaDefault);
+      llmOverrideManager.updateLLMOverride(personaDefault);
     } else if (user?.preferences.default_model) {
-      llmOverrideManager.setLlmOverride(
+      llmOverrideManager.updateLLMOverride(
         destructureValue(user?.preferences.default_model)
       );
     }
@@ -1202,7 +1204,6 @@ export function ChatPage({
       assistant_message_id: number;
       frozenMessageMap: Map<number, Message>;
     } = null;
-
     try {
       const mapKeys = Array.from(
         currentMessageMap(completeMessageDetail).keys()
@@ -1837,6 +1838,7 @@ export function ChatPage({
 
   const innerSidebarElementRef = useRef<HTMLDivElement>(null);
   const [settingsToggled, setSettingsToggled] = useState(false);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
 
   const currentPersona = alternativeAssistant || liveAssistant;
   useEffect(() => {
@@ -1903,11 +1905,6 @@ export function ChatPage({
   const showShareModal = (chatSession: ChatSession) => {
     setSharedChatSession(chatSession);
   };
-  const [documentSelection, setDocumentSelection] = useState(false);
-  // const toggleDocumentSelectionAspects = () => {
-  //   setDocumentSelection((documentSelection) => !documentSelection);
-  //   setShowDocSidebar(false);
-  // };
 
   const toggleDocumentSidebar = () => {
     if (!documentSidebarToggled) {
@@ -1971,6 +1968,32 @@ export function ChatPage({
       {popup}
 
       <ChatPopup />
+
+      {showDeleteAllModal && (
+        <DeleteEntityModal
+          entityType="All Chats"
+          entityName="all your chat sessions"
+          onClose={() => setShowDeleteAllModal(false)}
+          additionalDetails="This action cannot be undone. All your chat sessions will be deleted."
+          onSubmit={async () => {
+            const response = await deleteAllChatSessions("Chat");
+            if (response.ok) {
+              setShowDeleteAllModal(false);
+              setPopup({
+                message: "All your chat sessions have been deleted.",
+                type: "success",
+              });
+              refreshChatSessions();
+              router.push("/chat");
+            } else {
+              setPopup({
+                message: "Failed to delete all chat sessions.",
+                type: "error",
+              });
+            }
+          }}
+        />
+      )}
 
       {currentFeedback && (
         <FeedbackModal
@@ -2123,7 +2146,7 @@ export function ChatPage({
                   page="chat"
                   ref={innerSidebarElementRef}
                   toggleSidebar={toggleSidebar}
-                  toggled={toggledSidebar && !settings?.isMobile}
+                  toggled={toggledSidebar}
                   backgroundToggled={toggledSidebar || showHistorySidebar}
                   existingChats={chatSessions}
                   currentChatSession={selectedChatSession}
@@ -2132,6 +2155,7 @@ export function ChatPage({
                   removeToggle={removeToggle}
                   showShareModal={showShareModal}
                   showDeleteModal={showDeleteModal}
+                  showDeleteAllModal={() => setShowDeleteAllModal(true)}
                 />
               </div>
             </div>
@@ -2194,8 +2218,6 @@ export function ChatPage({
               {liveAssistant && (
                 <FunctionalHeader
                   toggleUserSettings={() => setUserSettingsToggled(true)}
-                  liveAssistant={liveAssistant}
-                  onAssistantChange={onAssistantChange}
                   sidebarToggled={toggledSidebar}
                   reset={() => setMessage("")}
                   page="chat"
@@ -2207,7 +2229,6 @@ export function ChatPage({
                   toggleSidebar={toggleSidebar}
                   currentChatSession={selectedChatSession}
                   documentSidebarToggled={documentSidebarToggled}
-                  llmOverrideManager={llmOverrideManager}
                 />
               )}
 
@@ -2742,6 +2763,10 @@ export function ChatPage({
                               removeDocs={() => {
                                 clearSelectedDocuments();
                               }}
+                              showDocs={() => {
+                                setFiltersToggled(false);
+                                setDocumentSidebarToggled(true);
+                              }}
                               removeFilters={() => {
                                 filterManager.setSelectedSources([]);
                                 filterManager.setSelectedTags([]);
@@ -2754,7 +2779,6 @@ export function ChatPage({
                               chatState={currentSessionChatState}
                               stopGenerating={stopGenerating}
                               openModelSettings={() => setSettingsToggled(true)}
-                              showDocs={() => setDocumentSelection(true)}
                               selectedDocuments={selectedDocuments}
                               // assistant stuff
                               selectedAssistant={liveAssistant}
