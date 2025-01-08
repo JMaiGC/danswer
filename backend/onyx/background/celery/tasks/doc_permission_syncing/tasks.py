@@ -16,6 +16,9 @@ from ee.onyx.db.connector_credential_pair import get_all_auto_sync_cc_pairs
 from ee.onyx.db.document import upsert_document_external_perms
 from ee.onyx.external_permissions.sync_params import DOC_PERMISSION_SYNC_PERIODS
 from ee.onyx.external_permissions.sync_params import DOC_PERMISSIONS_FUNC_MAP
+from ee.onyx.external_permissions.sync_params import (
+    DOC_SOURCE_TO_CHUNK_CENSORING_FUNCTION,
+)
 from onyx.access.models import DocExternalAccess
 from onyx.background.celery.apps.app_base import task_logger
 from onyx.configs.app_configs import JOB_TIMEOUT
@@ -99,11 +102,11 @@ def check_for_doc_permissions_sync(self: Task, *, tenant_id: str | None) -> bool
         timeout=CELERY_VESPA_SYNC_BEAT_LOCK_TIMEOUT,
     )
 
-    try:
-        # these tasks should never overlap
-        if not lock_beat.acquire(blocking=False):
-            return None
+    # these tasks should never overlap
+    if not lock_beat.acquire(blocking=False):
+        return None
 
+    try:
         # get all cc pairs that need to be synced
         cc_pair_ids_to_sync: list[int] = []
         with get_session_with_tenant(tenant_id) as db_session:
@@ -286,6 +289,8 @@ def connector_permission_sync_generator_task(
 
             doc_sync_func = DOC_PERMISSIONS_FUNC_MAP.get(source_type)
             if doc_sync_func is None:
+                if source_type in DOC_SOURCE_TO_CHUNK_CENSORING_FUNCTION:
+                    return None
                 raise ValueError(
                     f"No doc sync func found for {source_type} with cc_pair={cc_pair_id}"
                 )
