@@ -1,3 +1,4 @@
+import multiprocessing
 import os
 import sys
 import time
@@ -417,6 +418,15 @@ def check_for_indexing(self: Task, *, tenant_id: str | None) -> int | None:
             unfenced_attempt_ids = get_unfenced_index_attempt_ids(
                 db_session, redis_client
             )
+
+            if tenant_id in debug_tenants:
+                ttl = redis_client.ttl(OnyxRedisLocks.CHECK_INDEXING_BEAT_LOCK)
+                task_logger.info(
+                    f"check_for_indexing after get unfenced lock: "
+                    f"tenant={tenant_id} "
+                    f"ttl={ttl}"
+                )
+
             for attempt_id in unfenced_attempt_ids:
                 # debugging logic - remove after we're done
                 if tenant_id in debug_tenants:
@@ -853,11 +863,14 @@ def connector_indexing_proxy_task(
     search_settings_id: int,
     tenant_id: str | None,
 ) -> None:
-    """celery tasks are forked, but forking is unstable.  This proxies work to a spawned task."""
+    """celery tasks are forked, but forking is unstable.
+    This is a thread that proxies work to a spawned task."""
+
     task_logger.info(
         f"Indexing watchdog - starting: attempt={index_attempt_id} "
         f"cc_pair={cc_pair_id} "
-        f"search_settings={search_settings_id}"
+        f"search_settings={search_settings_id} "
+        f"mp_start_method={multiprocessing.get_start_method()}"
     )
 
     if not self.request.id:
