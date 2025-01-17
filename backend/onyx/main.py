@@ -55,6 +55,12 @@ from onyx.server.documents.indexing import router as indexing_router
 from onyx.server.documents.standard_oauth import router as oauth_router
 from onyx.server.features.document_set.api import router as document_set_router
 from onyx.server.features.folder.api import router as folder_router
+from onyx.server.features.input_prompt.api import (
+    admin_router as admin_input_prompt_router,
+)
+from onyx.server.features.input_prompt.api import (
+    basic_router as input_prompt_router,
+)
 from onyx.server.features.notifications.api import router as notification_router
 from onyx.server.features.persona.api import admin_router as admin_persona_router
 from onyx.server.features.persona.api import basic_router as persona_router
@@ -215,7 +221,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     else:
         setup_multitenant_onyx()
 
-    optional_telemetry(record_type=RecordType.VERSION, data={"version": __version__})
+    if not MULTI_TENANT:
+        # don't emit a metric for every pod rollover/restart
+        optional_telemetry(
+            record_type=RecordType.VERSION, data={"version": __version__}
+        )
 
     if AUTH_RATE_LIMITING_ENABLED:
         await setup_auth_limiter()
@@ -274,6 +284,8 @@ def get_application() -> FastAPI:
     include_router_with_global_prefix_prepended(application, connector_router)
     include_router_with_global_prefix_prepended(application, user_router)
     include_router_with_global_prefix_prepended(application, credential_router)
+    include_router_with_global_prefix_prepended(application, input_prompt_router)
+    include_router_with_global_prefix_prepended(application, admin_input_prompt_router)
     include_router_with_global_prefix_prepended(application, cc_pair_router)
     include_router_with_global_prefix_prepended(application, folder_router)
     include_router_with_global_prefix_prepended(application, document_set_router)
