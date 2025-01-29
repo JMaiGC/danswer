@@ -40,14 +40,7 @@ import * as Yup from "yup";
 import CollapsibleSection from "./CollapsibleSection";
 import { SuccessfulPersonaUpdateRedirectType } from "./enums";
 import { Persona, PersonaLabel, StarterMessage } from "./interfaces";
-import {
-  createPersonaLabel,
-  PersonaUpsertParameters,
-  createPersona,
-  deletePersonaLabel,
-  updatePersonaLabel,
-  updatePersona,
-} from "./lib";
+import { PersonaUpsertParameters, createPersona, updatePersona } from "./lib";
 import {
   CameraIcon,
   GroupsIconSkeleton,
@@ -80,9 +73,10 @@ import { errorHandlingFetcher } from "@/lib/fetcher";
 import { DeleteEntityModal } from "@/components/modals/DeleteEntityModal";
 import { DeletePersonaButton } from "./[id]/DeletePersonaButton";
 import Title from "@/components/ui/title";
+import { SEARCH_TOOL_ID } from "@/app/chat/tools/constants";
 
 function findSearchTool(tools: ToolSnapshot[]) {
-  return tools.find((tool) => tool.in_code_tool_id === "SearchTool");
+  return tools.find((tool) => tool.in_code_tool_id === SEARCH_TOOL_ID);
 }
 
 function findImageGenerationTool(tools: ToolSnapshot[]) {
