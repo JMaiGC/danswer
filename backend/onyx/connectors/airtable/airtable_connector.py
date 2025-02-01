@@ -1,4 +1,6 @@
+import contextvars
 from concurrent.futures import as_completed
+from concurrent.futures import Future
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from typing import Any
@@ -347,15 +349,19 @@ class AirtableConnector(LoadConnector):
 
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit batch tasks
-                future_to_record = {
-                    executor.submit(
-                        self._process_record,
-                        record=record,
-                        table_schema=table_schema,
-                        primary_field_name=primary_field_name,
-                    ): record
-                    for record in batch_records
-                }
+                future_to_record: dict[Future, RecordDict] = {}
+                for record in batch_records:
+                    # Capture the current context so that the thread gets the current tenant ID
+                    current_context = contextvars.copy_context()
+                    future_to_record[
+                        executor.submit(
+                            current_context.run,
+                            self._process_record,
+                            record=record,
+                            table_schema=table_schema,
+                            primary_field_name=primary_field_name,
+                        )
+                    ] = record
 
                 # Wait for all tasks in this batch to complete
                 for future in as_completed(future_to_record):
@@ -368,10 +374,8 @@ class AirtableConnector(LoadConnector):
                         logger.exception(f"Failed to process record {record['id']}")
                         raise e
 
-            # After batch is complete, yield if we've hit the batch size
-            if len(record_documents) >= self.batch_size:
-                yield record_documents
-                record_documents = []
+            yield record_documents
+            record_documents = []
 
         # Yield any remaining records
         if record_documents:
