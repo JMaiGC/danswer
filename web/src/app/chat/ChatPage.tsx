@@ -297,6 +297,7 @@ export function ChatPage({
   // 2. Selected assistant (assistnat default in this chat session)
   // 3. First pinned assistants (ordered list of pinned assistants)
   // 4. Available assistants (ordered list of available assistants)
+  // Relevant test: `live_assistant.spec.ts`
   const liveAssistant: Persona | undefined = useMemo(
     () =>
       alternativeAssistant ||
@@ -403,9 +404,6 @@ export function ChatPage({
       filterManager.setSelectedTags([]);
       filterManager.setTimeRange(null);
 
-      // reset LLM overrides (based on chat session!)
-      llmOverrideManager.updateTemperature(null);
-
       // remove uploaded files
       setCurrentMessageFiles([]);
 
@@ -448,6 +446,7 @@ export function ChatPage({
       );
 
       const chatSession = (await response.json()) as BackendChatSession;
+
       setSelectedAssistantFromId(chatSession.persona_id);
 
       const newMessageMap = processRawChatHistory(chatSession.messages);

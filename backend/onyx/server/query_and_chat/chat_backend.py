@@ -18,7 +18,6 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from onyx.auth.users import current_chat_accesssible_user
-from onyx.auth.users import current_limited_user
 from onyx.auth.users import current_user
 from onyx.chat.chat_utils import create_chat_chain
 from onyx.chat.chat_utils import extract_headers
@@ -78,6 +77,7 @@ from onyx.server.query_and_chat.models import LLMOverride
 from onyx.server.query_and_chat.models import PromptOverride
 from onyx.server.query_and_chat.models import RenameChatSessionResponse
 from onyx.server.query_and_chat.models import SearchFeedbackRequest
+from onyx.server.query_and_chat.models import UpdateChatSessionTemperatureRequest
 from onyx.server.query_and_chat.models import UpdateChatSessionThreadRequest
 from onyx.server.query_and_chat.token_limit import check_token_rate_limits
 from onyx.utils.headers import get_custom_tool_additional_request_headers
@@ -115,10 +115,50 @@ def get_user_chat_sessions(
                 shared_status=chat.shared_status,
                 folder_id=chat.folder_id,
                 current_alternate_model=chat.current_alternate_model,
+                current_temperature_override=chat.temperature_override,
             )
             for chat in chat_sessions
         ]
     )
+
+
+@router.put("/update-chat-session-temperature")
+def update_chat_session_temperature(
+    update_thread_req: UpdateChatSessionTemperatureRequest,
+    user: User | None = Depends(current_user),
+    db_session: Session = Depends(get_session),
+) -> None:
+    chat_session = get_chat_session_by_id(
+        chat_session_id=update_thread_req.chat_session_id,
+        user_id=user.id if user is not None else None,
+        db_session=db_session,
+    )
+
+    # Validate temperature_override
+    if update_thread_req.temperature_override is not None:
+        if (
+            update_thread_req.temperature_override < 0
+            or update_thread_req.temperature_override > 2
+        ):
+            raise HTTPException(
+                status_code=400, detail="Temperature must be between 0 and 2"
+            )
+
+        # Additional check for Anthropic models
+        if (
+            chat_session.current_alternate_model
+            and "anthropic" in chat_session.current_alternate_model.lower()
+        ):
+            if update_thread_req.temperature_override > 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Temperature for Anthropic models must be between 0 and 1",
+                )
+
+    chat_session.temperature_override = update_thread_req.temperature_override
+
+    db_session.add(chat_session)
+    db_session.commit()
 
 
 @router.put("/update-chat-session-model")
@@ -191,6 +231,7 @@ def get_chat_session(
         ],
         time_created=chat_session.time_created,
         shared_status=chat_session.shared_status,
+        current_temperature_override=chat_session.temperature_override,
     )
 
 
@@ -422,7 +463,7 @@ def set_message_as_latest(
 @router.post("/create-chat-message-feedback")
 def create_chat_feedback(
     feedback: ChatFeedbackRequest,
-    user: User | None = Depends(current_limited_user),
+    user: User | None = Depends(current_chat_accesssible_user),
     db_session: Session = Depends(get_session),
 ) -> None:
     user_id = user.id if user else None
