@@ -213,6 +213,8 @@ def get_chat_session(
         # we need the tool call objs anyways, so just fetch them in a single call
         prefetch_tool_calls=True,
     )
+    for message in session_messages:
+        translate_db_message_to_chat_message_detail(message)
 
     return ChatSessionDetailResponse(
         chat_session_id=session_id,
@@ -352,10 +354,12 @@ async def is_connected(request: Request) -> Callable[[], bool]:
     def is_connected_sync() -> bool:
         future = asyncio.run_coroutine_threadsafe(request.is_disconnected(), main_loop)
         try:
-            is_connected = not future.result(timeout=0.01)
+            is_connected = not future.result(timeout=0.05)
             return is_connected
         except asyncio.TimeoutError:
-            logger.error("Asyncio timed out")
+            logger.warning(
+                "Asyncio timed out (potentially missed request to stop streaming)"
+            )
             return True
         except Exception as e:
             error_msg = str(e)
@@ -713,8 +717,6 @@ def upload_files_for_chat(
             else ChatFileType.PLAIN_TEXT
         )
 
-        file_content = file.file.read()  # Read the file content
-
         if file_type == ChatFileType.IMAGE:
             file_content_io = file.file
             # NOTE: Image conversion to JPEG used to be enforced here.
@@ -723,7 +725,7 @@ def upload_files_for_chat(
             # 2. Maintain transparency in formats like PNG
             # 3. Ameliorate issue with file conversion
         else:
-            file_content_io = io.BytesIO(file_content)
+            file_content_io = io.BytesIO(file.file.read())
 
         new_content_type = file.content_type
 
@@ -741,7 +743,7 @@ def upload_files_for_chat(
         # to re-extract it every time we send a message
         if file_type == ChatFileType.DOC:
             extracted_text = extract_file_text(
-                file=io.BytesIO(file_content),  # use the bytes we already read
+                file=file_content_io, # use the bytes we already read
                 file_name=file.filename or "",
             )
             text_file_id = str(uuid.uuid4())
