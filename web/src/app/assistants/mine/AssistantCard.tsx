@@ -1,4 +1,4 @@
-import React, { useContext, useState, useRef, useLayoutEffect } from "react";
+import React, { useState, useRef, useLayoutEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   FiMoreHorizontal,
@@ -8,15 +8,13 @@ import {
   FiLock,
   FiUnlock,
 } from "react-icons/fi";
-import { FaHashtag } from "react-icons/fa";
+
 import {
   Popover,
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
 import { AssistantIcon } from "@/components/assistants/AssistantIcon";
-import { AssistantVisibilityPopover } from "./AssistantVisibilityPopover";
-import { DeleteAssistantPopover } from "./DeleteAssistantPopover";
 import { Persona } from "@/app/admin/assistants/interfaces";
 import { useUser } from "@/components/user/UserProvider";
 import { useAssistants } from "@/components/context/AssistantsContext";
@@ -28,14 +26,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { PinnedIcon } from "@/components/icons/icons";
-import {
-  deletePersona,
-  togglePersonaPublicStatus,
-} from "@/app/admin/assistants/lib";
+import { deletePersona } from "@/app/admin/assistants/lib";
 import { PencilIcon } from "lucide-react";
-import { SettingsContext } from "@/components/settings/SettingsProvider";
 import { usePaidEnterpriseFeaturesEnabled } from "@/components/settings/usePaidEnterpriseFeaturesEnabled";
 import { truncateString } from "@/lib/utils";
+import { usePopup } from "@/components/admin/connectors/Popup";
+import { Button } from "@/components/ui/button";
 
 export const AssistantBadge = ({
   text,
@@ -65,6 +61,7 @@ const AssistantCard: React.FC<{
   const { user, toggleAssistantPinnedStatus } = useUser();
   const router = useRouter();
   const { refreshAssistants, pinnedAssistants } = useAssistants();
+  const { popup, setPopup } = usePopup();
 
   const isOwnedByUser = checkUserOwnsAssistant(user, persona);
 
@@ -74,7 +71,34 @@ const AssistantCard: React.FC<{
 
   const isPaidEnterpriseFeaturesEnabled = usePaidEnterpriseFeaturesEnabled();
 
-  const handleDelete = () => setActivePopover("delete");
+  const [isDeleteConfirmation, setIsDeleteConfirmation] = useState(false);
+
+  const handleDelete = () => {
+    setIsDeleteConfirmation(true);
+  };
+
+  const confirmDelete = async () => {
+    const response = await deletePersona(persona.id);
+    if (response.ok) {
+      await refreshAssistants();
+      setActivePopover(null);
+      setIsDeleteConfirmation(false);
+      setPopup({
+        message: `${persona.name} has been successfully deleted.`,
+        type: "success",
+      });
+    } else {
+      setPopup({
+        message: `Failed to delete assistant - ${await response.text()}`,
+        type: "error",
+      });
+    }
+  };
+
+  const cancelDelete = () => {
+    setIsDeleteConfirmation(false);
+  };
+
   const handleEdit = () => {
     router.push(`/assistants/edit/${persona.id}`);
     setActivePopover(null);
@@ -102,6 +126,7 @@ const AssistantCard: React.FC<{
 
   return (
     <div className="w-full text-text-800 p-2 overflow-visible pb-4 pt-3 bg-transparent dark:bg-neutral-800/80 rounded shadow-[0px_0px_4px_0px_rgba(0,0,0,0.25)] flex flex-col">
+      {popup}
       <div className="w-full flex">
         <div className="ml-2 flex-none mr-2 mt-1 w-10 h-10">
           <AssistantIcon assistant={persona} size="large" />
@@ -149,14 +174,9 @@ const AssistantCard: React.FC<{
               )}
             </div>
             {isOwnedByUser && (
-              <div className="flex ml-2 items-center gap-x-2">
-                <Popover
-                  open={activePopover !== undefined}
-                  onOpenChange={(open) =>
-                    open ? setActivePopover(null) : setActivePopover(undefined)
-                  }
-                >
-                  <PopoverTrigger asChild>
+              <div className="flex ml-2 relative items-center gap-x-2">
+                <Popover>
+                  <PopoverTrigger>
                     <button
                       type="button"
                       className="hover:bg-neutral-200 dark:hover:bg-neutral-700 p-1 -my-1 rounded-full"
@@ -165,11 +185,11 @@ const AssistantCard: React.FC<{
                     </button>
                   </PopoverTrigger>
                   <PopoverContent
-                    className={`z-[1000000] ${
-                      activePopover === null ? "w-32" : "w-80"
-                    } p-2`}
+                    className={`${
+                      isDeleteConfirmation ? "w-64" : "w-32"
+                    } z-[10000] p-2`}
                   >
-                    {activePopover === null && (
+                    {!isDeleteConfirmation ? (
                       <div className="flex flex-col text-sm space-y-1">
                         <button
                           onClick={isOwnedByUser ? handleEdit : undefined}
@@ -200,7 +220,6 @@ const AssistantCard: React.FC<{
                                 ? "hover:bg-neutral-200 dark:hover:bg-neutral-800"
                                 : "opacity-50 cursor-not-allowed"
                             }`}
-                            disabled={!isOwnedByUser}
                           >
                             <FiBarChart size={12} className="inline mr-2" />
                             Stats
@@ -208,7 +227,7 @@ const AssistantCard: React.FC<{
                         )}
                         <button
                           onClick={isOwnedByUser ? handleDelete : undefined}
-                          className={`w-full text-left  items-center  px-2 py-1 rounded ${
+                          className={`w-full text-left items-center px-2 py-1 rounded ${
                             isOwnedByUser
                               ? "hover:bg-neutral-200 dark:hover:bg-neutral- text-red-600 dark:text-red-400"
                               : "opacity-50 cursor-not-allowed text-red-300 dark:text-red-500"
@@ -219,31 +238,29 @@ const AssistantCard: React.FC<{
                           Delete
                         </button>
                       </div>
-                    )}
-                    {activePopover === "visibility" && (
-                      <AssistantVisibilityPopover
-                        assistant={persona}
-                        user={user}
-                        allUsers={[]}
-                        onClose={closePopover}
-                        onTogglePublic={async (isPublic: boolean) => {
-                          await togglePersonaPublicStatus(persona.id, isPublic);
-                          await refreshAssistants();
-                        }}
-                      />
-                    )}
-                    {activePopover === "delete" && (
-                      <DeleteAssistantPopover
-                        entityName={persona.name}
-                        onClose={closePopover}
-                        onSubmit={async () => {
-                          const success = await deletePersona(persona.id);
-                          if (success) {
-                            await refreshAssistants();
-                          }
-                          closePopover();
-                        }}
-                      />
+                    ) : (
+                      <div className="w-full">
+                        <p className="text-sm mb-3">
+                          Are you sure you want to delete assistant{" "}
+                          <b>{persona.name}</b>?
+                        </p>
+                        <div className="flex justify-center gap-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={cancelDelete}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={confirmDelete}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
                     )}
                   </PopoverContent>
                 </Popover>
