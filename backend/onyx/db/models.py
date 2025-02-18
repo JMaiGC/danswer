@@ -1221,6 +1221,7 @@ class ChatMessage(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
+    is_agentic: Mapped[bool] = mapped_column(Boolean, default=False)
     refined_answer_improvement: Mapped[bool] = mapped_column(Boolean, nullable=True)
 
     chat_session: Mapped[ChatSession] = relationship("ChatSession")
@@ -1742,6 +1743,7 @@ class ChannelConfig(TypedDict):
     # If empty list, follow up with no tags
     follow_up_tags: NotRequired[list[str]]
     show_continue_in_web_ui: NotRequired[bool]  # defaults to False
+    disabled: NotRequired[bool]  # defaults to False
 
 
 class SlackChannelConfig(Base):
@@ -1765,6 +1767,7 @@ class SlackChannelConfig(Base):
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     persona: Mapped[Persona | None] = relationship("Persona")
+
     slack_bot: Mapped["SlackBot"] = relationship(
         "SlackBot",
         back_populates="slack_channel_configs",
