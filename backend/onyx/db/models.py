@@ -148,11 +148,12 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
     putting here for simpicity
     """
 
-    # if specified, controls the assistants that are shown to the user + their order
-    # if not specified, all assistants are shown
-    temperature_override_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    auto_scroll: Mapped[bool] = mapped_column(Boolean, default=True)
+    temperature_override_enabled: Mapped[bool | None] = mapped_column(
+        Boolean, default=None
+    )
+    auto_scroll: Mapped[bool | None] = mapped_column(Boolean, default=None)
     shortcut_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+
     chosen_assistants: Mapped[list[int] | None] = mapped_column(
         postgresql.JSONB(), nullable=True, default=None
     )
@@ -203,6 +204,13 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
         back_populates="creator",
         primaryjoin="User.id == foreign(ConnectorCredentialPair.creator_id)",
     )
+
+    @property
+    def password_configured(self) -> bool:
+        """
+        Returns True if the user has at least one OAuth (or OIDC) account.
+        """
+        return not bool(self.oauth_accounts)
 
 
 class AccessToken(SQLAlchemyBaseAccessTokenTableUUID, Base):
@@ -342,7 +350,9 @@ class Document__Tag(Base):
     document_id: Mapped[str] = mapped_column(
         ForeignKey("document.id"), primary_key=True
     )
-    tag_id: Mapped[int] = mapped_column(ForeignKey("tag.id"), primary_key=True)
+    tag_id: Mapped[int] = mapped_column(
+        ForeignKey("tag.id"), primary_key=True, index=True
+    )
 
 
 class Persona__Tool(Base):
