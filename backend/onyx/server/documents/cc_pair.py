@@ -123,15 +123,15 @@ def get_cc_pair_full_info(
     )
     is_editable_for_current_user = editable_cc_pair is not None
 
-    cc_pair_identifier = ConnectorCredentialPairIdentifier(
-        connector_id=cc_pair.connector_id,
-        credential_id=cc_pair.credential_id,
-    )
-
     document_count_info_list = list(
         get_document_counts_for_cc_pairs(
             db_session=db_session,
-            cc_pair_identifiers=[cc_pair_identifier],
+            cc_pairs=[
+                ConnectorCredentialPairIdentifier(
+                    connector_id=cc_pair.connector_id,
+                    credential_id=cc_pair.credential_id,
+                )
+            ],
         )
     )
     documents_indexed = (
@@ -620,7 +620,7 @@ def associate_credential_to_connector(
     )
 
     try:
-        validate_ccpair_for_user(connector_id, credential_id, db_session, tenant_id)
+        validate_ccpair_for_user(connector_id, credential_id, db_session)
 
         response = add_credential_to_connector(
             db_session=db_session,
