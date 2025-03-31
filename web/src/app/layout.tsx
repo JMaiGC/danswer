@@ -20,7 +20,7 @@ import {
 import { fetchAssistantData } from "@/lib/chat/fetchAssistantdata";
 import { AppProvider } from "@/components/context/AppProvider";
 import { PHProvider } from "./providers";
-import { getCurrentUserSS } from "@/lib/userSS";
+import { getAuthTypeMetadataSS, getCurrentUserSS } from "@/lib/userSS";
 import { Suspense } from "react";
 import PostHogPageView from "./PostHogPageView";
 import Script from "next/script";
@@ -55,7 +55,7 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 
   return {
-    title: enterpriseSettings?.application_name ?? "Onyx",
+    title: enterpriseSettings?.application_name || "Onyx",
     description: "Question answering for your documents",
     icons: {
       icon: logoLocation,
@@ -70,11 +70,13 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [combinedSettings, assistantsData, user] = await Promise.all([
-    fetchSettingsSS(),
-    fetchAssistantData(),
-    getCurrentUserSS(),
-  ]);
+  const [combinedSettings, assistantsData, user, authTypeMetadata] =
+    await Promise.all([
+      fetchSettingsSS(),
+      fetchAssistantData(),
+      getCurrentUserSS(),
+      getAuthTypeMetadataSS(),
+    ]);
 
   const productGating =
     combinedSettings?.settings.application_status ?? ApplicationStatus.ACTIVE;
@@ -147,6 +149,7 @@ export default async function RootLayout({
 
   return getPageContent(
     <AppProvider
+      authTypeMetadata={authTypeMetadata}
       user={user}
       settings={combinedSettings}
       assistants={assistants}
